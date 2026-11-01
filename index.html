@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Humanizer</title>
+<style>
+:root{--bg:#faf8f5;--card:#fff;--text:#1f1d1a;--muted:#6b665f;--line:#e3ded6;--accent:#c4552d;--on:#fff;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#171513;--card:#211e1b;--text:#f1ede7;--muted:#a39d94;--line:#3a352f;--accent:#e4764d;--on:#171513;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:28px 18px 48px}
+h1{font-size:1.7rem;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+label{display:block;font-weight:600;font-size:.9rem;margin:16px 0 6px}
+textarea,select{width:100%;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit}
+textarea{min-height:170px;resize:vertical}
+.row{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:11px 20px;cursor:pointer;background:var(--accent);color:var(--on)}
+button.alt{background:transparent;color:var(--text);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:default}
+#out{white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;min-height:80px}
+#msg,.note{color:var(--muted);font-size:.9rem}
+.note{margin-top:22px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Humanizer</h1>
+  <p class="sub">Paste text, get a plainer, more natural rewrite. Same facts, less robotic.</p>
+  <label for="inp">Your text (max 6000 characters)</label>
+  <textarea id="inp" maxlength="6000" placeholder="Paste your text here..."></textarea>
+  <label for="tone">Tone</label>
+  <select id="tone">
+    <option value="casual">Casual</option>
+    <option value="school" selected>School / clear</option>
+    <option value="professional">Professional</option>
+    <option value="social">Social / hype</option>
+  </select>
+  <div class="row">
+    <button id="go">Humanize</button>
+    <button id="copy" class="alt" disabled>Copy</button>
+    <span id="msg"></span>
+  </div>
+  <label>Result</label>
+  <div id="out" aria-live="polite"></div>
+  <p class="note">Read the result and tweak a few lines into your own voice. Always check the meaning still matches the original.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+$('go').onclick=async()=>{
+  const text=$('inp').value.trim();
+  if(!text){$('msg').textContent='Paste some text first.';return;}
+  $('go').disabled=true;$('copy').disabled=true;$('out').textContent='';$('msg').textContent='Working...';
+  try{
+    const r=await fetch('/api/humanize',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text,tone:$('tone').value})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Error');
+    $('out').textContent=d.text;$('copy').disabled=false;$('msg').textContent='Done.';
+  }catch(e){$('msg').textContent=e.message||'Something went wrong.';}
+  $('go').disabled=false;
+};
+$('copy').onclick=()=>navigator.clipboard.writeText($('out').textContent).then(()=>$('msg').textContent='Copied.');
+</script>
+</body>
+</html>
