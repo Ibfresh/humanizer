@@ -12,6 +12,7 @@ module.exports = async (req, res) => {
   const { text, tone } = req.body || {};
   if (typeof text !== "string" || !text.trim()) return res.status(400).json({ error: "No text" });
   if (text.length > 6000) return res.status(400).json({ error: "Text too long (max 6000 characters)" });
+  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "GEMINI_API_KEY is missing in Vercel. Add it, then Redeploy." });
   const toneText = TONES[tone] || TONES.school;
 
   const prompt =
@@ -21,6 +22,7 @@ module.exports = async (req, res) => {
     "in conclusion, it is important to note, landscape); avoid em dashes; keep roughly the same length and paragraph " +
     "structure. Reply with only the rewritten text, no intro or notes.\n\nTEXT:\n" + text;
 
+  let lastErr = "no response";
   let busy = false;
   for (const model of MODELS) {
     try {
@@ -30,19 +32,25 @@ module.exports = async (req, res) => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-goog-api-key": process.env.GEMINI_API_KEY
+            "x-goog-api-key": process.env.GEMINI_API_KEY.trim()
           },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         }
       );
-      if (r.status === 429) { busy = true; continue; }
-      if (!r.ok) continue;
       const data = await r.json();
+      if (r.status === 429) { busy = true; lastErr = model + ": busy (429)"; continue; }
+      if (!r.ok) {
+        lastErr = model + ": " + r.status + " " + ((data.error && data.error.message) || "error");
+        continue;
+      }
       const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
       const out = parts.map(p => p.text || "").join("").trim();
       if (out) return res.status(200).json({ text: out });
-    } catch (e) {}
+      lastErr = model + ": empty reply";
+    } catch (e) {
+      lastErr = model + ": " + e.message;
+    }
   }
   if (busy) return res.status(429).json({ error: "Busy right now, try again in a minute" });
-  return res.status(502).json({ error: "Something went wrong, try again" });
+  return res.status(502).json({ error: lastErr.slice(0, 300) });
 };
