@@ -5,6 +5,8 @@ const TONES = {
   social: "punchy and energetic, suitable for social media or a community announcement"
 };
 
+const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   const { text, tone } = req.body || {};
@@ -19,25 +21,28 @@ module.exports = async (req, res) => {
     "in conclusion, it is important to note, landscape); avoid em dashes; keep roughly the same length and paragraph " +
     "structure. Reply with only the rewritten text, no intro or notes.\n\nTEXT:\n" + text;
 
-  try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5-5",
-        max_tokens: 2000,
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
-    const data = await r.json();
-    if (!r.ok) return res.status(502).json({ error: "Upstream error" });
-    const out = (data.content || []).map(b => b.text || "").join("").trim();
-    return res.status(200).json({ text: out });
-  } catch (e) {
-    return res.status(500).json({ error: "Server error" });
+  let busy = false;
+  for (const model of MODELS) {
+    try {
+      const r = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-goog-api-key": process.env.GEMINI_API_KEY
+          },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        }
+      );
+      if (r.status === 429) { busy = true; continue; }
+      if (!r.ok) continue;
+      const data = await r.json();
+      const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+      const out = parts.map(p => p.text || "").join("").trim();
+      if (out) return res.status(200).json({ text: out });
+    } catch (e) {}
   }
+  if (busy) return res.status(429).json({ error: "Busy right now, try again in a minute" });
+  return res.status(502).json({ error: "Something went wrong, try again" });
 };
