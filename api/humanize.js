@@ -5,7 +5,7 @@ const TONES = {
   social: "punchy and energetic, suitable for social media or a community announcement"
 };
 
-const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+   const MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
